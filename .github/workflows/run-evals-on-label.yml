@@ -1,0 +1,33 @@
+name: Run Evals on Label
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  evaluate:
+    if: github.event.label.name == 'run_evals'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run experiment
+        env:
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          LANGSMITH_WORKSPACE_ID: ${{ secrets.LANGSMITH_WORKSPACE_ID }}
+          LANGSMITH_PROJECT: ${{ secrets.LANGSMITH_PROJECT }}
+          DATASET_NAME: ${{ secrets.DATASET_NAME }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Only needed if you are NOT on the default US endpoint (EU / self-hosted):
+          # LANGSMITH_ENDPOINT: ${{ secrets.LANGSMITH_ENDPOINT }}
+        run: uv run python eval.py --experiment-prefix "pr-${{ github.event.pull_request.number }}"

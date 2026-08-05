@@ -1,0 +1,21 @@
+[project]
+name = "engine-workshop"
+version = "0.1.0"
+description = "GTM assistant agent"
+requires-python = ">=3.11"
+dependencies = [
+    "langsmith>=0.1.100",
+    "python-dotenv>=1.0.0",
+    "langchain>=1.0",
+    "langgraph>=1.0",
+    "langgraph-cli>=0.4.9",
+    "langgraph-api>=0.5.37",
+    "langchain-openai>=0.2.0",
+    "pydantic>=2.0",
+    "deepagents>=0.6,<0.7",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29",
+]

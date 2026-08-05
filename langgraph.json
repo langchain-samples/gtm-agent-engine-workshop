@@ -1,0 +1,7 @@
+{
+    "dependencies": ["."],
+    "graphs": {
+        "gtm_agent": "./gtm_agent/gtm_agent.py:gtm_agent"
+    },
+    "env": ".env"
+}

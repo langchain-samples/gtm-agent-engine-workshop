@@ -1,0 +1,19 @@
+# Secrets / environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Project instructions (local only)
+CLAUDE.md
+.claude/
+
+# Python / uv
+.venv/
+__pycache__/
+*.py[cod]
+.python-version
+
+# OS / editor
+.DS_Store
