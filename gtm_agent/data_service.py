@@ -16,8 +16,15 @@ __all__ = [
     "get_offering", "get_prospect_record", "update_prospect_info",
     "fetch_engagement_history", "fetch_account_details", "fetch_tech_stack",
     "get_profile_from_db", "save_profile_to_db",
-    "get_rep",
+    "get_rep", "SAFE_PROSPECT_FIELDS", "safe_prospect_fields",
 ]
+
+SAFE_PROSPECT_FIELDS = (
+    "name", "email", "annual_revenue", "enrichment_source", "disqualified",
+)
+_PROFILE_ENRICHMENT_FIELDS = (
+    "engagement_history", "account_details", "tech_stack",
+)
 
 # Built prospect profiles are cached in memory (keyed by prospect_id) so repeat
 # lookups within a run are served without rebuilding.
@@ -34,6 +41,11 @@ def get_offering(offering_id):
 def get_prospect_record(prospect_id):
     "Return the source prospect record for prospect_id, or None if not found."
     return PROSPECTS.get(prospect_id)
+
+
+def safe_prospect_fields(record):
+    "Return only prospect fields approved for model context."
+    return {key: record[key] for key in SAFE_PROSPECT_FIELDS if key in record}
 
 
 def get_rep(rep):
@@ -63,14 +75,30 @@ def fetch_tech_stack(prospect_id):
 @traceable(run_type="tool", name="get_profile_from_db")
 def get_profile_from_db(prospect_id):
     "Look up a stored prospect profile. Returns {'prospect_profile': record|None}."
-    return {"prospect_profile": _PROFILES.get(prospect_id)}
+    profile = _PROFILES.get(prospect_id)
+    if profile is None:
+        return {"prospect_profile": None}
+    profile = _safe_profile(prospect_id, profile)
+    _PROFILES[prospect_id] = profile
+    return {"prospect_profile": profile}
 
 
 @traceable(run_type="tool", name="save_profile_to_db")
 def save_profile_to_db(prospect_id, profile):
     "Persist a prospect profile to the profile store."
-    _PROFILES[prospect_id] = profile
+    _PROFILES[prospect_id] = _safe_profile(prospect_id, profile)
     return {"saved": True}
+
+
+def _safe_profile(prospect_id, profile):
+    safe = {"prospect_id": prospect_id, **safe_prospect_fields(profile)}
+    safe.update({
+        key: profile[key]
+        for key in _PROFILE_ENRICHMENT_FIELDS
+        if key in profile
+    })
+    return safe
+
 
 def update_prospect_info(prospect_id, technology):
     "Add a technology to a prospect's source-of-truth record."
