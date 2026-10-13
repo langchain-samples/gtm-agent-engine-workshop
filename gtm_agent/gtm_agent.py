@@ -58,11 +58,12 @@ def build_prospect_profile(prospect_id: str) -> dict:
         return {"prospect_profile": None, "found": False}
     built = {
         "prospect_id": prospect_id,
-        **rec,
+        **{key: rec[key] for key in data_service.PROSPECT_PROFILE_FIELDS if key in rec},
         "engagement_history": data_service.fetch_engagement_history(prospect_id),
         "account_details": data_service.fetch_account_details(prospect_id),
         "tech_stack": data_service.fetch_tech_stack(prospect_id),
     }
+    built = data_service.filter_prospect_profile(built)
     data_service.save_profile_to_db(prospect_id, built)
     return {"prospect_profile": built, "found": True}
 
@@ -109,8 +110,9 @@ def score_prospect(prospect_profile: dict, offering: dict | None = None) -> dict
         return {"score": None, "error": "Cannot score without a valid offering."}
     # Score against the prospect's saved tech stack of record.
     pid = prospect_profile.get("prospect_id")
+    prospect_profile = data_service.filter_prospect_profile(prospect_profile)
     if pid is not None:
-        prospect_profile = {**prospect_profile, "tech_stack": data_service.fetch_tech_stack(pid)}
+        prospect_profile["tech_stack"] = data_service.fetch_tech_stack(pid)
     user = (
         "Offering:\n" + json.dumps(offering, indent=2) +
         "\n\nProspect profile:\n" + json.dumps(prospect_profile, indent=2)
@@ -132,8 +134,9 @@ def get_prospect(prospect_id: str) -> dict:
     # caller can pull from build_prospect_profile instead.
     contact = {
         "prospect_id": prospect_id,
-        **{k: v for k, v in record.items()
-           if k not in ("engagement_history", "account_details", "tech_stack")},
+        **{key: record[key] for key in (
+            "name", "email", "annual_revenue", "disqualified", "enrichment_source",
+        ) if key in record},
     }
     return {"prospect": contact, "found": True}
 

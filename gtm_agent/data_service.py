@@ -15,13 +15,28 @@ from .gtm_records import OFFERINGS, PROSPECTS, REP_IDS
 __all__ = [
     "get_offering", "get_prospect_record", "update_prospect_info",
     "fetch_engagement_history", "fetch_account_details", "fetch_tech_stack",
-    "get_profile_from_db", "save_profile_to_db",
+    "get_profile_from_db", "save_profile_to_db", "filter_prospect_profile",
     "get_rep",
 ]
 
 # Built prospect profiles are cached in memory (keyed by prospect_id) so repeat
 # lookups within a run are served without rebuilding.
 _PROFILES = {}
+PROSPECT_PROFILE_FIELDS = (
+    "prospect_id",
+    "name",
+    "email",
+    "annual_revenue",
+    "disqualified",
+    "enrichment_source",
+    "account_details",
+    "engagement_history",
+    "tech_stack",
+)
+
+
+def filter_prospect_profile(profile):
+    return {key: profile[key] for key in PROSPECT_PROFILE_FIELDS if key in profile}
 
 # ---------------------------------------------------------------------------
 # Public data-access functions
@@ -63,13 +78,17 @@ def fetch_tech_stack(prospect_id):
 @traceable(run_type="tool", name="get_profile_from_db")
 def get_profile_from_db(prospect_id):
     "Look up a stored prospect profile. Returns {'prospect_profile': record|None}."
-    return {"prospect_profile": _PROFILES.get(prospect_id)}
+    profile = _PROFILES.get(prospect_id)
+    if profile is not None:
+        profile = filter_prospect_profile(profile)
+        _PROFILES[prospect_id] = profile
+    return {"prospect_profile": profile}
 
 
 @traceable(run_type="tool", name="save_profile_to_db")
 def save_profile_to_db(prospect_id, profile):
     "Persist a prospect profile to the profile store."
-    _PROFILES[prospect_id] = profile
+    _PROFILES[prospect_id] = filter_prospect_profile(profile)
     return {"saved": True}
 
 def update_prospect_info(prospect_id, technology):
