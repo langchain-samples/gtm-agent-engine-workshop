@@ -6,9 +6,13 @@ name: PR eval (main vs. fix)
 #
 # `pull_request` (not `pull_request_target`) is intentional: it means fork PRs
 # do NOT get access to the upstream repo's secrets, so the attendee has to
-# put LANGSMITH_API_KEY + OPENAI_API_KEY + DATASET_NAME as secrets on their
-# own fork. That is exactly the workshop model — everyone evaluates against
-# their own workspace.
+# put LANGSMITH_API_KEY + DATASET_NAME as secrets on their own fork. That is
+# exactly the workshop model — everyone evaluates against their own workspace.
+#
+# OPENAI_API_KEY is optional. Without it, the agent's model calls go through
+# the LangSmith LLM Gateway, authenticated by LANGSMITH_API_KEY, and the
+# gateway uses the OpenAI key stored as a secret in that workspace. A workshop
+# host can then give attendees a model without handing out the key itself.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -36,6 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       ready: ${{ steps.check.outputs.ready }}
+      use_gateway: ${{ steps.check.outputs.use_gateway }}
     steps:
       - id: check
         uses: actions/github-script@v7
@@ -45,9 +50,11 @@ jobs:
           HAS_DATASET: ${{ secrets.DATASET_NAME != '' }}
         with:
           script: |
+            // No OPENAI_API_KEY means the model calls go through the gateway.
+            core.setOutput('use_gateway', process.env.HAS_OPENAI === 'true' ? 'false' : 'true');
+
             const missing = [];
             if (process.env.HAS_LANGSMITH !== 'true') missing.push('LANGSMITH_API_KEY');
-            if (process.env.HAS_OPENAI !== 'true')    missing.push('OPENAI_API_KEY');
             if (process.env.HAS_DATASET !== 'true')   missing.push('DATASET_NAME');
 
             if (missing.length === 0) {
@@ -111,11 +118,23 @@ jobs:
       - name: Sync deps
         run: uv sync --frozen
 
+      # Only when the fork has no OPENAI_API_KEY secret. The gateway takes
+      # provider/model names, hence GTM_MODEL. LANGSMITH_GATEWAY_URL is an
+      # optional repository variable for a non-US LangSmith region.
+      - name: Route model calls through the LangSmith gateway
+        if: needs.check-secrets.outputs.use_gateway == 'true'
+        env:
+          GATEWAY_URL: ${{ vars.LANGSMITH_GATEWAY_URL || 'https://gateway.smith.langchain.com/v1' }}
+        run: |
+          echo "OPENAI_BASE_URL=${GATEWAY_URL}" >> "$GITHUB_ENV"
+          echo "GTM_MODEL=openai/gpt-4o-mini" >> "$GITHUB_ENV"
+
       - name: Run eval on ${{ matrix.side }}
         id: run
         env:
           LANGSMITH_API_KEY:    ${{ secrets.LANGSMITH_API_KEY }}
-          OPENAI_API_KEY:       ${{ secrets.OPENAI_API_KEY }}
+          # Through the gateway, the LangSmith key authenticates the model calls.
+          OPENAI_API_KEY:       ${{ needs.check-secrets.outputs.use_gateway == 'true' && secrets.LANGSMITH_API_KEY || secrets.OPENAI_API_KEY }}
           DATASET_NAME:         ${{ secrets.DATASET_NAME }}
           LANGSMITH_WORKSPACE_ID: ${{ secrets.LANGSMITH_WORKSPACE_ID }}
           LANGSMITH_ENDPOINT:   ${{ secrets.LANGSMITH_ENDPOINT }}

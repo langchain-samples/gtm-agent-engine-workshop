@@ -220,10 +220,19 @@ head commit, runs `eval.py` on each (as `pr-<number>-main` and `pr-<number>-fix`
 Compare view.
 
 It runs on **your fork's** secrets in GitHub, not the upstream repo's, so add these under
-**Settings → Secrets and variables → Actions**: `LANGSMITH_API_KEY`, `OPENAI_API_KEY` (or whatever
-your model routing needs), and `DATASET_NAME` — plus `LANGSMITH_WORKSPACE_ID`, `LANGSMITH_ENDPOINT`,
-and `LANGSMITH_PROJECT` if your setup needs them. If one of the three required secrets is missing,
-the workflow comments which one and fails fast, so you can add it and hit **Re-run failed jobs**.
+**Settings → Secrets and variables → Actions**: `LANGSMITH_API_KEY` and `DATASET_NAME`, plus
+`LANGSMITH_WORKSPACE_ID`, `LANGSMITH_ENDPOINT`, and `LANGSMITH_PROJECT` if your setup needs them. If
+either required secret is missing, the workflow comments which one and fails fast, so you can add it
+and hit **Re-run failed jobs**.
+
+`OPENAI_API_KEY` is optional. If you add it, the agent calls OpenAI directly with it. If you leave it
+out, the agent's model calls go through the [LangSmith LLM Gateway](https://docs.langchain.com/langsmith/llm-gateway),
+authenticated by `LANGSMITH_API_KEY`, and the gateway uses the OpenAI key stored in your workspace
+(step 1). A workshop host can then add one key to every attendee's workspace without anyone handling
+the key itself. The LangSmith API key needs the `gateway:invoke` and `workspaces:read` permissions;
+on Enterprise plans the built-in Workspace Editor and Viewer roles have neither
+([admin setup](https://docs.langchain.com/langsmith/llm-gateway-admin-setup)). Outside the US region,
+set the repository variable `LANGSMITH_GATEWAY_URL` to your region's gateway URL.
 
 A pull request is the only trigger — there's no "Run workflow" button. If opening the PR produces no
 run at all, check, in order:
