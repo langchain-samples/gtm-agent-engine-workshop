@@ -33,7 +33,8 @@ from deepagents import create_deep_agent
 from . import data_service
 from .data_service import REP_IDS
 
-MODEL_NAME = "gpt-4o-mini"
+# GTM_MODEL lets the eval workflow use the LangSmith gateway's provider/model naming.
+MODEL_NAME = os.environ.get("GTM_MODEL", "gpt-4o-mini")
 
 # ---------------------------------------------------------------------------
 # Tools
