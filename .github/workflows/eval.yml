@@ -11,8 +11,9 @@ name: PR eval (main vs. fix)
 #
 # OPENAI_API_KEY is optional. Without it, the agent's model calls go through
 # the LangSmith LLM Gateway, authenticated by LANGSMITH_API_KEY, and the
-# gateway uses the OpenAI key stored as a secret in that workspace. A workshop
-# host can then give attendees a model without handing out the key itself.
+# gateway uses the OpenAI or Anthropic key stored as a secret in that
+# workspace. A workshop host can then give attendees a model without handing
+# out the key itself.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -119,15 +120,37 @@ jobs:
         run: uv sync --frozen
 
       # Only when the fork has no OPENAI_API_KEY secret. The gateway takes
-      # provider/model names, hence GTM_MODEL. LANGSMITH_GATEWAY_URL is an
-      # optional repository variable for a non-US LangSmith region.
+      # provider/model names, hence GTM_MODEL. The model is the GTM_MODEL
+      # repository variable if set. Otherwise it is gpt-4o-mini when the
+      # workspace has an OpenAI key, and Claude Haiku 4.5 when it only has an
+      # Anthropic key. LANGSMITH_GATEWAY_URL is an optional repository
+      # variable for a non-US LangSmith region.
       - name: Route model calls through the LangSmith gateway
         if: needs.check-secrets.outputs.use_gateway == 'true'
         env:
           GATEWAY_URL: ${{ vars.LANGSMITH_GATEWAY_URL || 'https://gateway.smith.langchain.com/v1' }}
+          LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+          MODEL_OVERRIDE: ${{ vars.GTM_MODEL }}
         run: |
+          set -euo pipefail
+          model="${MODEL_OVERRIDE}"
+          if [ -z "${model}" ]; then
+            if ! models=$(curl -sSf -H "Authorization: Bearer ${LANGSMITH_API_KEY}" "${GATEWAY_URL}/models" | jq -r '.data[].id'); then
+              echo "::error::Could not list gateway models. The LangSmith API key needs the gateway:invoke and workspaces:read permissions."
+              exit 1
+            fi
+            if grep -q '^openai/' <<< "${models}"; then
+              model="openai/gpt-4o-mini"
+            elif grep -q '^anthropic/' <<< "${models}"; then
+              model="anthropic/claude-haiku-4-5-20251001"
+            else
+              echo "::error::The workspace has no OpenAI or Anthropic key for the gateway. Add one as a workspace secret, or set the GTM_MODEL repository variable."
+              exit 1
+            fi
+          fi
+          echo "Model calls go through the LangSmith gateway to ${model}"
           echo "OPENAI_BASE_URL=${GATEWAY_URL}" >> "$GITHUB_ENV"
-          echo "GTM_MODEL=openai/gpt-4o-mini" >> "$GITHUB_ENV"
+          echo "GTM_MODEL=${model}" >> "$GITHUB_ENV"
 
       - name: Run eval on ${{ matrix.side }}
         id: run
